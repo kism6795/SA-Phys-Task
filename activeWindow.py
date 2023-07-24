@@ -22,7 +22,7 @@ import time
 from datetime import datetime
 import sys
 # for active window measurements
-from win32.win32gui import GetWindowText, GetForegroundWindow, SetForegroundWindow, FindWindow, GetActiveWindow 
+from win32.win32gui import IsWindowVisible, EnumWindows, GetWindowText, GetForegroundWindow, SetForegroundWindow, FindWindow, GetActiveWindow 
 # LSL Stream
 from pylsl import StreamInfo, StreamOutlet
 # File Management
@@ -43,6 +43,22 @@ import tkinter as tk
 from tkinter import ttk
 import win32com.client
 
+#%% Functions
+# returns handle and name of windows with 'Situation Awareness Objective Assessment' in title
+def window_enum_handler(hwnd, resultList):
+    if IsWindowVisible(hwnd) and GetWindowText(hwnd) != '':
+        if 'Situation Awareness Objective Assessment' in GetWindowText( hwnd ):
+            resultList.append((hwnd, GetWindowText(hwnd)))
+
+# packages handle and window name and returns it to user.
+def get_app_list(handles=[]):
+    mlst=[]
+    EnumWindows(window_enum_handler, handles)
+    for handle in handles:
+        mlst.append(handle)
+    return mlst
+
+#%%
 # Enables SetForegroundWindow Function according to StackOverflow
 # https://stackoverflow.com/questions/14295337/win32gui-setactivewindow-error-the-specified-procedure-could-not-be-found
 shell = win32com.client.Dispatch("WScript.Shell")
@@ -62,13 +78,21 @@ headers = {
     "x-api-token": apiToken,
     }
 
+#%% Window Handle Setup ##
+# get text name for VS-Code window
+code_window = GetWindowText(GetForegroundWindow()); # get the name of this window
+
+# get handle of SA Assessment
+sa_window_handle = get_app_list()
+if len(sa_window_handle) > 0:
+    sa_window_handle = sa_window_handle[0][0]
+
 #%% Data Management Setup ##
 #1 set date/folder names
 cwd = os.getcwd()
 subj_num = '002'        # format
 test_date = '0923'      # format [mmdd]
 subj_folder = "Subject-{0}-{1}".format(subj_num, test_date);
-code_window = GetWindowText(GetForegroundWindow()); # get the name of this window
 #2 set MATB location
 MATB_path = 'C:\\MATB\\Data'
 #3 get last file name if other files exist
@@ -183,11 +207,17 @@ while 1:
 
             #%% start trial
             trial_started = 1;
-            
+        
+        if (active_window[1:22] == 'Workload Rating Scale') & (window_int == 0):
+            # if workload rating pops up and SA Assessment hasn't been opened
+            # move SA assessment to foreground
+            SetForegroundWindow(sa_window_handle);
+
         if active_window[0:40] == 'Situation Awareness Objective Assessment':
             window_int = 1;         
             print('SA Assessment: Trial {0}'.format(trial_count));
             stream_outlet1.push_sample(x = [2]);   # ping fNIRS when SA Assessment is started
+
 
         if (active_window[1:22] == 'Workload Rating Scale') & (window_int == 1):
             window_int = 2;       
